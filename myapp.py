@@ -14,6 +14,8 @@ from storage import store_to_excel
 import load_spreadsheet
 import json
 
+from storage import update_storage
+
 
 class SharedData:
     """
@@ -26,6 +28,7 @@ class SharedData:
         """
         self.json = None
         self.jstore = JsonStore('.CQ.json')
+        self.current_action = 0
 
 
 class DashboardScreen(Screen):
@@ -49,6 +52,7 @@ class ActionListScreen(Screen):
 
         index = int(instance.text.split(':')[0]) - 1
         action = actions[index]
+        App.get_running_app().shared_data.current_action = index
 
         result = '{}:\n\n'.format(action["Action and Category"])
         if action["Repeat?"] != "No":
@@ -89,6 +93,30 @@ class ActionScreen(Screen):
     Contains the information available about a specific action
     """
     action_text = StringProperty('')
+
+    def complete_action(self):
+        """
+        Function to update the current action as completed
+        :return: None
+        """
+        actions = App.get_running_app().shared_data.json
+        index = App.get_running_app().shared_data.current_action
+        action = actions[index]
+
+        if action["Repeat?"] == "No":
+            if action["Times Completed"] > 0:
+                raise ValueError("Cannot complete unrepeatable action multiple times")
+            else:
+                action["Times Completed"] += 1
+        else:
+            if action["Maximum?"] == 'None':
+                action["Times Completed"] += 1
+            elif action["Times Completed"] < action["Maximum"]:
+                action["Times Completed"] += 1
+            else:
+                raise ValueError("Already completed action the maximum number of times")
+
+        update_storage(action, App.get_running_app().shared_data.jstore)
 
 
 class FileSelectorPopup(FloatLayout):
@@ -136,9 +164,13 @@ class IntroductionScreen(Screen):
         json_actions = load_spreadsheet.get_actions(selection[0])
         App.get_running_app().shared_data.json = json.loads(json_actions)
 
-        print(type(App.get_running_app().shared_data.json))
-
         self.dismiss_popup()
+        print(App.get_running_app().root.current)
+        if App.get_running_app().root.current == "introduction":
+            print("Made if")
+            App.get_running_app().root.current = "ActionListScreen"
+            App.get_running_app().root.transition.direction = "left"
+            print(App.get_running_app().root.current)
 
     def dashboard_transition(self):
         actions = App.get_running_app().shared_data.json
